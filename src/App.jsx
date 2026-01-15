@@ -1,20 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Search, Calendar, User, Package, ArrowRight, Check, X, Trash2, Clock, Phone, Mail, Building2, Wrench, FileText, Download, AlertTriangle, Send, Eye, ChevronDown, ChevronUp, History, Loader2 } from 'lucide-react';
-
-// Charger html2pdf.js au démarrage
-const loadHtml2Pdf = () => {
-  return new Promise((resolve, reject) => {
-    if (window.html2pdf) {
-      resolve(window.html2pdf);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    script.onload = () => resolve(window.html2pdf);
-    script.onerror = () => reject(new Error('Impossible de charger html2pdf'));
-    document.head.appendChild(script);
-  });
-};
+import { Plus, Search, Calendar, User, Package, ArrowRight, Check, X, Trash2, Clock, Phone, Mail, Building2, Wrench, FileText, Download, AlertTriangle, Send, Eye, ChevronDown, ChevronUp, History } from 'lucide-react';
 
 // Panel Component
 const SlidePanel = ({ isOpen, onClose, title, children, width = 'w-80' }) => {
@@ -58,8 +43,8 @@ const CompactModal = ({ isOpen, onClose, children }) => {
   );
 };
 
-// PDF Preview Modal avec état de chargement
-const PDFPreviewModal = ({ isOpen, onClose, title, content, onDownload, isDownloading }) => {
+// PDF Preview Modal
+const PDFPreviewModal = ({ isOpen, onClose, title, content, onDownload }) => {
   if (!isOpen) return null;
   return (
     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -69,20 +54,10 @@ const PDFPreviewModal = ({ isOpen, onClose, title, content, onDownload, isDownlo
           <div className="flex items-center gap-2">
             <button 
               onClick={onDownload} 
-              disabled={isDownloading}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all disabled:opacity-70 disabled:cursor-wait"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-lg text-sm font-medium hover:shadow-md transition-all"
             >
-              {isDownloading ? (
-                <>
-                  <Loader2 size={14} className="animate-spin" />
-                  Génération...
-                </>
-              ) : (
-                <>
-                  <Download size={14} />
-                  Télécharger PDF
-                </>
-              )}
+              <Download size={14} />
+              Télécharger PDF
             </button>
             <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
               <X size={16} className="text-gray-500" />
@@ -167,15 +142,12 @@ export default function App() {
     notes: '' 
   });
   const [deviceToDelete, setDeviceToDelete] = useState(null);
-  const [generatingContract, setGeneratingContract] = useState(false);
   const [pdfPreview, setPdfPreview] = useState({ isOpen: false, type: '', data: null });
   const [emailPreview, setEmailPreview] = useState({ isOpen: false, data: null });
   const [returnDevice, setReturnDevice] = useState(null);
   const [returnNotes, setReturnNotes] = useState('');
   const [returnCondition, setReturnCondition] = useState('bon');
   const [expandedHistory, setExpandedHistory] = useState({});
-  const [isDownloading, setIsDownloading] = useState(false);
-  const [html2pdfReady, setHtml2pdfReady] = useState(false);
 
   // Company info for documents
   const companyInfo = {
@@ -187,12 +159,6 @@ export default function App() {
   };
 
   // Charger html2pdf au démarrage
-  useEffect(() => {
-    loadHtml2Pdf()
-      .then(() => setHtml2pdfReady(true))
-      .catch(err => console.error('Erreur chargement html2pdf:', err));
-  }, []);
-
   useEffect(() => {
     const saved = localStorage.getItem('appareils-pret');
     const savedHistory = localStorage.getItem('appareils-pret-historique');
@@ -612,46 +578,24 @@ export default function App() {
       `;
     }
     
-    // Create a temporary container for html2pdf
-    const container = document.createElement('div');
-    container.style.position = 'absolute';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    container.innerHTML = htmlContent;
-    document.body.appendChild(container);
-
-    const fileName = type === 'contract' 
-      ? `Contrat_Pret_${device.numero}_${today}.pdf`
-      : `Fiche_Restitution_${device.numero}_${today}.pdf`;
-
-    try {
-      // Attendre que html2pdf soit chargé
-      await loadHtml2Pdf();
-      
-      const element = container.querySelector('body') || container.firstChild;
-      const opt = {
-        margin: [10, 10, 10, 10],
-        filename: fileName,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { 
-          scale: 2, 
-          useCORS: true, 
-          letterRendering: true,
-          logging: false
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
-      
-      await window.html2pdf().set(opt).from(element).save();
-      document.body.removeChild(container);
-      return true;
-    } catch (error) {
-      console.error('Erreur génération PDF:', error);
-      if (container.parentNode) {
-        document.body.removeChild(container);
-      }
-      throw error;
+    // Ouvrir une nouvelle fenêtre avec le contenu HTML pour impression/sauvegarde PDF
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    if (!printWindow) {
+      throw new Error('Popup bloquée. Veuillez autoriser les popups pour ce site.');
     }
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+    
+    // Attendre que le contenu soit chargé puis lancer l'impression
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print();
+      }, 250);
+    };
+    
+    return true;
   };
 
   // Generate loan contract PDF content
@@ -957,19 +901,16 @@ ${companyInfo.email}`
   };
 
   // Handle contract download
-  const handleDownloadContract = async () => {
+  const handleDownloadContract = () => {
     if (!pdfPreview.data) return;
     
-    setIsDownloading(true);
     try {
-      await generateAndDownloadPDF('contract', pdfPreview.data);
-      showNotification('✓ Contrat téléchargé avec succès !', 'success');
+      generateAndDownloadPDF('contract', pdfPreview.data);
+      showNotification('✓ Document ouvert - Sélectionnez "Enregistrer en PDF" dans la boîte d\'impression', 'success');
       setPdfPreview({ isOpen: false, type: '', data: null });
     } catch (error) {
       console.error('Erreur:', error);
-      showNotification('❌ Erreur lors du téléchargement. Réessayez.', 'error');
-    } finally {
-      setIsDownloading(false);
+      showNotification('❌ ' + error.message, 'error');
     }
   };
 
@@ -985,19 +926,16 @@ ${companyInfo.email}`
   };
 
   // Handle return form download
-  const handleDownloadReturnForm = async () => {
+  const handleDownloadReturnForm = () => {
     if (!pdfPreview.data) return;
     
-    setIsDownloading(true);
     try {
-      await generateAndDownloadPDF('return', pdfPreview.data);
-      showNotification('✓ Fiche téléchargée avec succès !', 'success');
+      generateAndDownloadPDF('return', pdfPreview.data);
+      showNotification('✓ Document ouvert - Sélectionnez "Enregistrer en PDF" dans la boîte d\'impression', 'success');
       setPdfPreview({ isOpen: false, type: '', data: null });
     } catch (error) {
       console.error('Erreur:', error);
-      showNotification('❌ Erreur lors du téléchargement. Réessayez.', 'error');
-    } finally {
-      setIsDownloading(false);
+      showNotification('❌ ' + error.message, 'error');
     }
   };
 
@@ -1684,7 +1622,7 @@ ${companyInfo.email}`
       {/* PDF Preview Modal */}
       <PDFPreviewModal
         isOpen={pdfPreview.isOpen}
-        onClose={() => !isDownloading && setPdfPreview({ isOpen: false, type: '', data: null })}
+        onClose={() => setPdfPreview({ isOpen: false, type: '', data: null })}
         title={pdfPreview.type === 'contract' ? 'Contrat de Prêt' : 'Fiche de Restitution'}
         content={
           pdfPreview.type === 'contract' && pdfPreview.data
@@ -1694,7 +1632,6 @@ ${companyInfo.email}`
             : null
         }
         onDownload={pdfPreview.type === 'contract' ? handleDownloadContract : handleDownloadReturnForm}
-        isDownloading={isDownloading}
       />
 
       {/* Email Preview Modal */}
